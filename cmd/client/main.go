@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+	fmt.Println("Starting Peril client...")
 	const rabbitConnString = "amqp://guest:guest@localhost:5672/"
 
 	conn, err := amqp.Dial(rabbitConnString)
@@ -20,19 +21,24 @@ func main() {
 		log.Fatalf("could not connect to RabbitMQ: %v", err)
 	}
 	defer conn.Close()
-	fmt.Println("Peril game server connected to RabbitMQ!")
+	fmt.Println("Peril game client connected to RabbitMQ!")
 
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		log.Fatalf("could not connect: %v", err)
+		log.Fatalf("could not get username: %v", err)
 	}
 
-	queueName := fmt.Sprintf("%s.%s", routing.PauseKey, username)
-
-	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.SimpleQueueTransient)
+	_, queue, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilDirect,
+		routing.PauseKey+"."+username,
+		routing.PauseKey,
+		pubsub.SimpleQueueTransient,
+	)
 	if err != nil {
-		log.Fatalf("could not connect: %v", err)
+		log.Fatalf("could not subscribe to pause: %v", err)
 	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	// wait for ctrl+c
 	signalChan := make(chan os.Signal, 1)
