@@ -38,7 +38,7 @@ func main() {
 	}
 	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
-	gameState := gamelogic.NewGameState(username)
+	gs := gamelogic.NewGameState(username)
 
 	for {
 		words := gamelogic.GetInput()
@@ -46,27 +46,32 @@ func main() {
 			continue
 		}
 		switch words[0] {
-		case "spawn":
-			err := gameState.CommandSpawn(words)
-			if err != nil {
-				log.Fatalf("could not spawn: %v", err)
-			}
 		case "move":
-			_, err = gameState.CommandMove(words)
+			_, err := gs.CommandMove(words)
 			if err != nil {
-				log.Fatalf("could not move: %v", err)
+				fmt.Println(err)
+				continue
+			}
+
+			// TODO: publish the move
+		case "spawn":
+			err = gs.CommandSpawn(words)
+			if err != nil {
+				fmt.Println(err)
+				continue
 			}
 		case "status":
-			gameState.CommandStatus()
+			gs.CommandStatus()
 		case "help":
 			gamelogic.PrintClientHelp()
 		case "spam":
+			// TODO: publish n malicious logs
 			fmt.Println("Spamming not allowed yet!")
 		case "quit":
 			gamelogic.PrintQuit()
+			return
 		default:
 			fmt.Println("unknown command")
-			continue
 		}
 	}
 }
