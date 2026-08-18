@@ -25,12 +25,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not get username: %v", err)
 	}
-
 	gs := gamelogic.NewGameState(username)
 
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, "pause."+username, routing.PauseKey, pubsub.SimpleQueueTransient, handlerPause(gs))
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilDirect,
+		routing.PauseKey+"."+gs.GetUsername(),
+		routing.PauseKey,
+		pubsub.SimpleQueueTransient,
+		handlerPause(gs),
+	)
 	if err != nil {
-		log.Fatalf("could do the thing: %v", err)
+		log.Fatalf("could not subscribe to pause: %v", err)
 	}
 
 	for {
