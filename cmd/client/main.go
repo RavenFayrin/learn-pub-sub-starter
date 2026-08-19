@@ -21,12 +21,28 @@ func main() {
 	defer conn.Close()
 	fmt.Println("Peril game client connected to RabbitMQ!")
 
+	publishCh, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("could not create channel: %v", err)
+	}
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		log.Fatalf("could not get username: %v", err)
 	}
 	gs := gamelogic.NewGameState(username)
 
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix+"."+gs.GetUsername(),
+		routing.ArmyMovesPrefix+".*",
+		pubsub.SimpleQueueTransient,
+		handlerMove(gs),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to army moves: %v", err)
+	}
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
@@ -39,25 +55,6 @@ func main() {
 		log.Fatalf("could not subscribe to pause: %v", err)
 	}
 
-	err = pubsub.SubscribeJSON(
-		conn,
-		routing.ExchangePerilTopic,
-		routing.ArmyMovesPrefix+"."+gs.GetUsername(),
-		routing.ArmyMovesPrefix+".*",
-		pubsub.SimpleQueueTransient,
-		func(move gamelogic.ArmyMove) {
-			_ = gs.HandleMove(move)
-		},
-	)
-	if err != nil {
-		log.Fatalf("could not subscribe to moves: %v", err)
-	}
-
-	publishCh, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("could not open channel: %v", err)
-	}
-
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
@@ -65,7 +62,7 @@ func main() {
 		}
 		switch words[0] {
 		case "move":
-			move, err := gs.CommandMove(words)
+			mv, err := gs.CommandMove(words)
 			if err != nil {
 				fmt.Println(err)
 				continue
@@ -74,15 +71,14 @@ func main() {
 			err = pubsub.PublishJSON(
 				publishCh,
 				routing.ExchangePerilTopic,
-				routing.ArmyMovesPrefix+"."+gs.GetUsername(),
-				move,
+				routing.ArmyMovesPrefix+"."+mv.Player.Username,
+				mv,
 			)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Printf("error: %s\n", err)
 				continue
 			}
-
-			fmt.Println("Move made successfully")
+			fmt.Printf("Moved %v units to %s\n", len(mv.Units), mv.ToLocation)
 		case "spawn":
 			err = gs.CommandSpawn(words)
 			if err != nil {
